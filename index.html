@@ -1,17 +1,101 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pi Kiosk</title>
-  <style>
-    html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{display:flex;align-items:center;justify-content:center;height:100%}
-  </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pi Kiosk Tiles</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    background: #111;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 960px 960px;     /* top row: two tiles */
+    grid-template-rows: 600px 600px;        /* each row 600px tall */
+    width: 1920px;
+    height: 1200px;
+    margin: 0 auto;
+  }
+
+  .tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2rem;
+    font-weight: 600;
+  }
+
+  /* Top row */
+  .tile1 {
+    grid-column: 1;
+    grid-row: 1;
+    background: #1abc9c; /* teal */
+  }
+  .tile2 {
+    grid-column: 2;
+    grid-row: 1;
+    background: #e67e22; /* orange */
+  }
+
+  /* Bottom row */
+  .tile3 {
+    grid-column: 1;
+    grid-row: 2;
+    width: 640px;
+    background: #27ae60; /* green */
+  }
+  .tile4 {
+    grid-column: 1;
+    grid-row: 2;
+    margin-left: 640px;
+    width: 640px;
+    background: #9b59b6; /* purple */
+  }
+  .tile5 {
+    grid-column: 1;
+    grid-row: 2;
+    margin-left: 1280px;
+    width: 640px;
+    background: #c0392b; /* red */
+  }
+</style>
 </head>
+<script>
+  // Dev-only auto-reload using Last-Modified header (works over HTTP).
+  const DEV_AUTO_RELOAD = true;
+  if (DEV_AUTO_RELOAD) {
+    let last = '';
+    async function poll() {
+      try {
+        const res = await fetch(location.pathname, { method: 'HEAD', cache: 'no-store' });
+        const lm = res.headers.get('last-modified') || '';
+        if (last && lm && lm !== last) {
+          location.reload();
+          return;
+        }
+        last = lm;
+      } catch (e) {
+        // ignore transient errors
+      }
+      setTimeout(poll, 1500);
+    }
+    poll();
+  }
+</script>
 <body>
-  <div class="wrap">
-    <h1>Hello from the Pi kiosk 👋</h1>
+  <div class="grid">
+    <div class="tile tile1">Tile 1</div>
+    <div class="tile tile2">Tile 2</div>
+    <div class="tile tile3">Tile 3</div>
+    <div class="tile tile4">Tile 4</div>
+    <div class="tile tile5">Tile 5</div>
   </div>
 </body>
 </html>
