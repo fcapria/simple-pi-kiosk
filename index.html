@@ -6,67 +6,118 @@
   <title>Pi Kiosk Tiles</title>
 <style>
   html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    width: 100%;
-    background: #111;
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #111; overflow: hidden;
     font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   }
 
-  .grid {
+  /* Outer container = 2 rows (600px each) */
+  .container {
+    width: 1920px; height: 1200px; margin: 0 auto;
+    display: flex; flex-direction: column;
+  }
+
+  /* Top row: 2 columns of 960px */
+  .top {
     display: grid;
-    grid-template-columns: 960px 960px;     /* top row: two tiles */
-    grid-template-rows: 600px 600px;        /* each row 600px tall */
-    width: 1920px;
-    height: 1200px;
-    margin: 0 auto;
+    grid-template-columns: 960px 960px;
+    grid-template-rows: 600px;
   }
 
+  /* Bottom row: 3 columns of 640px */
+  .bottom {
+    display: grid;
+    grid-template-columns: 640px 640px 640px;
+    grid-template-rows: 600px;
+  }
   .tile {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 2rem;
-    font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 2rem; font-weight: 600; overflow: hidden;
   }
 
-  /* Top row */
-  .tile1 {
-    grid-column: 1;
-    grid-row: 1;
-    background: #1abc9c; /* teal */
+  /* Colors */
+  .tile2 { position: relative; background: #000; overflow: hidden; }
+  .tile2::before {
+    z-index: 0;
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url('img/house.jpg') center / cover no-repeat;
+    opacity: 0.2;
+    pointer-events: none;
   }
-  .tile2 {
-    grid-column: 2;
-    grid-row: 1;
-    background: #e67e22; /* orange */
+  /* Tile 2 text overlay */
+  .tile2-overlay {
+    z-index: 1;
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    justify-content:flex-end; padding: 28px 32px; pointer-events: none;
   }
-
-  /* Bottom row */
+  .nest-title{
+    font-size:2.2rem; font-weight:700; letter-spacing:.08em; opacity:.9;
+    text-shadow:0 2px 6px rgba(0,0,0,.5);
+  }
+  .nest-lines{
+    margin-top:8px; font-size:1.9rem; line-height:1.25; font-weight:600;
+    text-shadow:0 2px 8px rgba(0,0,0,.65);
+  }
+  .nest-line{ opacity:.95; }
+  /* --- Tile 3: 1024×829 camera inside 640×600 tile --- */
   .tile3 {
-    grid-column: 1;
-    grid-row: 2;
-    width: 640px;
-    background: #27ae60; /* green */
+    position: relative;
+    background: #000;
+    overflow: hidden;              /* hide any bleed */
   }
-  .tile4 {
-    grid-column: 1;
-    grid-row: 2;
-    margin-left: 640px;
-    width: 640px;
-    background: #9b59b6; /* purple */
+  /* Center the iframe and scale it to fit */
+  .tile3 iframe {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1024px;                 /* camera's intrinsic size */
+    height: 829px;
+    transform-origin: center center;
+    transform: translate(-50%, -50%) scale(0.625); /* 640 / 1024 = 0.625 */
+    border: 0;
   }
-  .tile5 {
-    grid-column: 1;
-    grid-row: 2;
-    margin-left: 1280px;
-    width: 640px;
-    background: #c0392b; /* red */
+  /* Colors */
+  .tile4 { background: #9b59b6; } /* purple */
+  .tile5 { background: #c0392b; } /* red */
+
+  /* Make Tile 1's YouTube fill its tile */
+  .tile1 iframe {
+    width: 100%; height: 100%; border: 0;
   }
 </style>
 </head>
+<body>
+  <div class="container">
+    <div class="top">
+      <div class="tile tile1">
+        <iframe
+          src="https://www.youtube.com/embed/ww6oRiTtszE?autoplay=1&mute=1"
+          title="YouTube video player"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen>
+        </iframe>
+      </div>
+      <!-- Tile 2 -->
+      <div class="tile tile2">
+        <div class="tile2-overlay" id="nestOverlay">
+          <div class="nest-title">HOUSE</div>
+          <div class="nest-lines" id="nestLines">Loading…</div>
+        </div>
+      </div>
+    </div>
+    <div class="bottom">
+      <div class="tile tile3">
+        <iframe
+          src="https://newengland511.org/map/Cctv/1672?t=1760281998"
+          allowfullscreen>
+        </iframe>
+      </div>
+      <div class="tile tile4">Tile 4</div>
+      <div class="tile tile5">Tile 5</div>
+    </div>
+  </div>
 <script>
   // Dev-only auto-reload using Last-Modified header (works over HTTP).
   const DEV_AUTO_RELOAD = true;
@@ -89,13 +140,67 @@
     poll();
   }
 </script>
-<body>
-  <div class="grid">
-    <div class="tile tile1">Tile 1</div>
-    <div class="tile tile2">Tile 2</div>
-    <div class="tile tile3">Tile 3</div>
-    <div class="tile tile4">Tile 4</div>
-    <div class="tile tile5">Tile 5</div>
-  </div>
+<script>
+  // Refresh only Tile 3 every 3 minutes (180000 ms)
+  setInterval(() => {
+    const cam = document.querySelector('.tile3 iframe');
+    if (cam) {
+      const src = cam.src.split('?')[0];     // strip old query params
+      cam.src = `${src}?t=${Date.now()}`;    // force reload with new timestamp
+    }
+  }, 180000); // 3 minutes
+</script>
+<script>
+  const REL = 'data/nest.json';
+  const ABS = 'file:///home/fcapria/app/data/nest.json';  // absolute fallback
+  const REFRESH_MS = 300_000;
+
+  async function fetchJSON(url) {
+    const r = await fetch(url);            // no cache-buster; local file
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  async function load_nest() {
+    const el = document.getElementById('nestLines');
+    if (!el) return;
+
+    try {
+      // Try relative first (works when not in --app), then absolute (works in --app)
+      const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
+
+      const list = (data.thermostats || [])
+        .filter(t => t && t.room && t.tempF != null)
+        .map(t => `${t.room}: ${t.tempF.toFixed(1)}°F, ${t.humidity ?? '—'}%`)
+        .sort((a,b) => a.localeCompare(b));
+
+      el.innerHTML = list.length
+        ? list.map(s => `<div class="nest-line">${s}</div>`).join('')
+        : '<div class="nest-line">No thermostats</div>';
+    } catch (e) {
+      // brief retry in case we hit the file mid-atomic-replace
+      setTimeout(async () => {
+        try {
+          const data = await fetchJSON(ABS);
+          const list = (data.thermostats || [])
+            .filter(t => t && t.room && t.tempF != null)
+            .map(t => `${t.room}: ${t.tempF.toFixed(1)}°F, ${t.humidity ?? '—'}%`)
+            .sort((a,b) => a.localeCompare(b));
+          el.innerHTML = list.length
+            ? list.map(s => `<div class="nest-line">${s}</div>`).join('')
+            : '<div class="nest-line">No thermostats</div>';
+        } catch {
+          el.textContent = 'Unavailable';
+        }
+      }, 1500);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    load_nest();
+    setInterval(load_nest, REFRESH_MS);
+  });
+</script>
+
 </body>
 </html>
