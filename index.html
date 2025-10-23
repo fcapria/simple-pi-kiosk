@@ -4,104 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pi Kiosk Tiles</title>
-<style>
-  html, body {
-    margin: 0; padding: 0; height: 100%; width: 100%;
-    background: #111; overflow: hidden;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  }
-
-  .container {
-    width: 1920px; height: 1200px; margin: 0 auto;
-    display: flex; flex-direction: column;
-  }
-
-  .top {
-    display: grid;
-    grid-template-columns: 960px 960px;
-    grid-template-rows: 600px;
-  }
-
-  .bottom {
-    display: grid;
-    grid-template-columns: 640px 640px 640px;
-    grid-template-rows: 600px;
-  }
-
-  .tile {
-    display: flex; align-items: center; justify-content: center;
-    color: white; font-size: 2rem; font-weight: 600; overflow: hidden;
-  }
-
-  .tile2 { position: relative; background: #000; overflow: hidden; }
-  .tile2::before {
-    z-index: 0;
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: url('img/house.jpg') center / cover no-repeat;
-    opacity: 0.2;
-    pointer-events: none;
-  }
-
-  /* Tile 2 text overlay (bottom-left) */
-  .tile2-overlay {
-    z-index: 1;
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column;
-    justify-content: flex-end;   /* bottom */
-    align-items: flex-start;     /* left */
-    padding: 28px 32px;
-    pointer-events: none;
-  }
-
-  .nest-title{
-    font-size:2rem; font-weight:400; opacity:.8;
-    text-shadow:0 2px 8px rgba(0,0,0,.5);
-    margin-left:-6px; /* nudge so "45" aligns with grid text */
-  }
-
-  .nest-lines{
-    margin-top:8px; font-size:2rem; line-height:1.25; font-weight:400; opacity:.8;
-    text-shadow:0 2px 8px rgba(0,0,0,.5);
-  }
-
-  /* Grid near center, left-aligned text */
-  .nest-grid {
-    display: grid;
-    grid-template-columns: auto auto auto; /* Room | Temp | Humidity */
-    gap: 8px 18px;
-    align-items: baseline;
-    position: relative;
-    left: 48%;
-    transform: translateX(-50%);
-    text-align: left;
-  }
-  .nest-grid .cell.temp,
-  .nest-grid .cell.hum {
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: "tnum" 1;
-  }
-
-  .tile3 { position: relative; background: #000; overflow: hidden; }
-  .tile3 iframe {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 1024px; height: 829px;
-    transform-origin: center center;
-    transform: translate(-50%, -50%) scale(0.625);
-    border: 0;
-  }
-
-  .tile4 { background: #9b59b6; }
-  .tile5 { background: #c0392b; }
-
-  .tile1 iframe { width: 100%; height: 100%; border: 0; }
-</style>
+  <link rel="stylesheet" href="kiosk.css?v=1">
 </head>
+
 <body>
   <div class="container">
     <div class="top">
+      <!-- === Tile 1 === -->
       <div class="tile tile1">
         <iframe
           src="https://www.youtube.com/embed/ww6oRiTtszE?autoplay=1&mute=1"
@@ -111,7 +20,15 @@
         </iframe>
       </div>
 
+      <!-- === Tile 2 === -->
       <div class="tile tile2">
+        <!-- Solar Event (upper-right) -->
+        <div class="solar-event-topright">
+          <div id="solar-time" class="solar-event-time"></div>
+          <div id="solar-count" class="solar-event-count"></div>
+        </div>
+
+        <!-- Nest overlay (bottom-left) -->
         <div class="tile2-overlay" id="nestOverlay">
           <div class="nest-title">45 McKay Road</div>
           <div class="nest-lines">
@@ -127,6 +44,7 @@
       </div>
     </div>
 
+    <!-- === Bottom Row === -->
     <div class="bottom">
       <div class="tile tile3">
         <iframe
@@ -139,137 +57,225 @@
     </div>
   </div>
 
-<script>
-  // Dev auto-reload
-  const DEV_AUTO_RELOAD = true;
-  if (DEV_AUTO_RELOAD) {
-    let last = '';
-    async function poll() {
-      try {
-        const res = await fetch(location.pathname, { method: 'HEAD', cache: 'no-store' });
-        const lm = res.headers.get('last-modified') || '';
-        if (last && lm && lm !== last) { location.reload(); return; }
-        last = lm;
-      } catch {}
-      setTimeout(poll, 1500);
-    }
-    poll();
-  }
-</script>
-
-<script>
-  // Refresh only Tile 3 every 3 minutes
-  setInterval(() => {
-    const cam = document.querySelector('.tile3 iframe');
-    if (cam) {
-      const src = cam.src.split('?')[0];
-      cam.src = `${src}?t=${Date.now()}`;
-    }
-  }, 180000);
-</script>
-
-<script>
-  const REL = 'data/nest.json';
-  const ABS = 'file:///home/fcapria/app/data/nest.json';
-  const REFRESH_MS = 300000;
-
-  async function fetchJSON(url) {
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-  }
-
-  function renderNestGrid(containerEl, thermostats) {
-    // Keep the Outbuilding 3 cells that are already in the grid
-    const outCells = Array.from(containerEl.querySelectorAll('#outbuildingTemp'))
-      .map(span => {
-        const tempCell = span.closest('.cell');
-        return {
-          room: tempCell?.previousElementSibling?.outerHTML || '',
-          temp: tempCell?.outerHTML || '',
-          hum:  tempCell?.nextElementSibling?.outerHTML || ''
-        };
-      })[0];
-
-    const thermoHTML = (thermostats || [])
-      .filter(t => t && t.room && t.tempF != null)
-      .sort((a,b) => String(a.room).localeCompare(String(b.room)))
-      .map(t => `
-        <div class="cell room">${t.room}</div>
-        <div class="cell temp">${Number(t.tempF).toFixed(1)}°F</div>
-        <div class="cell hum">${t.humidity != null ? `${t.humidity}%` : '—'}</div>
-      `).join('');
-
-    const fallback = `
-      <div class="cell room">No thermostats</div>
-      <div class="cell temp">—</div>
-      <div class="cell hum">—</div>
-    `;
-
-    // Rebuild grid content: thermostat rows + preserved Outbuilding cells
-    containerEl.innerHTML =
-      (thermoHTML || fallback) +
-      ((outCells && (outCells.room + outCells.temp + outCells.hum)) ||
-       `<div class="cell room">Outbuilding</div>
-        <div class="cell temp"><span id="outbuildingTemp">—</span></div>
-        <div class="cell hum"></div>`);
-  }
-
-  async function load_nest() {
-    const grid = document.getElementById('nestGrid');
-    if (!grid) return;
-    try {
-      const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
-      renderNestGrid(grid, data.thermostats);
-    } catch {
-      setTimeout(async () => {
+  <!-- === Dev Auto-Reload === -->
+  <script>
+    const DEV_AUTO_RELOAD = true;
+    if (DEV_AUTO_RELOAD) {
+      let last = '';
+      async function poll() {
         try {
-          const data = await fetchJSON(ABS);
-          renderNestGrid(grid, data.thermostats);
-        } catch {
-          // Keep Outbuilding row even on failure
-          const existingOut = `
-            <div class="cell room">Outbuilding</div>
-            <div class="cell temp"><span id="outbuildingTemp">—</span></div>
-            <div class="cell hum"></div>`;
-          grid.innerHTML = `
-            <div class="cell room">Unavailable</div>
-            <div class="cell temp">—</div>
-            <div class="cell hum">—</div>
-          ` + existingOut;
-        }
-      }, 1500);
+          const res = await fetch(location.pathname, { method: 'HEAD', cache: 'no-store' });
+          const lm = res.headers.get('last-modified') || '';
+          if (last && lm && lm !== last) { location.reload(); return; }
+          last = lm;
+        } catch {}
+        setTimeout(poll, 1500);
+      }
+      poll();
     }
-  }
+  </script>
 
-  document.addEventListener('DOMContentLoaded', () => {
-    load_nest();
-    setInterval(load_nest, REFRESH_MS);
-  });
-</script>
+  <!-- === Refresh only Tile 3 every 3 minutes === -->
+  <script>
+    setInterval(() => {
+      const cam = document.querySelector('.tile3 iframe');
+      if (cam) {
+        const src = cam.src.split('?')[0];
+        cam.src = `${src}?t=${Date.now()}`;
+      }
+    }, 180000);
+  </script>
 
-<script>
-  // Outbuilding updater (does not add °F automatically)
-  (async () => {
-    const REL = "data/outbuilding.txt";
-    const ABS = "file:///home/fcapria/app/data/outbuilding.txt";
-    const REFRESH_MS = 1800000; // 30 minutes
+  <!-- === Nest Data Loader === -->
+  <script>
+    const REL = 'data/nest.json';
+    const ABS = 'file:///home/fcapria/app/data/nest.json';
+    const REFRESH_MS = 300000;
 
-    async function loadOutbuilding() {
+    async function fetchJSON(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function renderNestGrid(containerEl, thermostats) {
+      const outCells = Array.from(containerEl.querySelectorAll('#outbuildingTemp'))
+        .map(span => {
+          const tempCell = span.closest('.cell');
+          return {
+            room: tempCell?.previousElementSibling?.outerHTML || '',
+            temp: tempCell?.outerHTML || '',
+            hum:  tempCell?.nextElementSibling?.outerHTML || ''
+          };
+        })[0];
+
+      const thermoHTML = (thermostats || [])
+        .filter(t => t && t.room && t.tempF != null)
+        .sort((a,b) => String(a.room).localeCompare(String(b.room)))
+        .map(t => `
+          <div class="cell room">${t.room}</div>
+          <div class="cell temp">${Number(t.tempF).toFixed(1)}°F</div>
+          <div class="cell hum">${t.humidity != null ? `${t.humidity}%` : '—'}</div>
+        `).join('');
+
+      const fallback = `
+        <div class="cell room">No thermostats</div>
+        <div class="cell temp">—</div>
+        <div class="cell hum">—</div>
+      `;
+
+      containerEl.innerHTML =
+        (thermoHTML || fallback) +
+        ((outCells && (outCells.room + outCells.temp + outCells.hum)) ||
+         `<div class="cell room">Outbuilding</div>
+          <div class="cell temp"><span id="outbuildingTemp">—</span></div>
+          <div class="cell hum"></div>`);
+    }
+
+    async function load_nest() {
+      const grid = document.getElementById('nestGrid');
+      if (!grid) return;
       try {
-        const res = await fetch(REL).catch(() => fetch(ABS));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = (await res.text()).trim();
-        const span = document.getElementById("outbuildingTemp");
-        if (span) span.textContent = text || "—";
+        const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
+        renderNestGrid(grid, data.thermostats);
       } catch {
-        const span = document.getElementById("outbuildingTemp");
-        if (span) span.textContent = "Unavailable";
+        setTimeout(async () => {
+          try {
+            const data = await fetchJSON(ABS);
+            renderNestGrid(grid, data.thermostats);
+          } catch {
+            const existingOut = `
+              <div class="cell room">Outbuilding</div>
+              <div class="cell temp"><span id="outbuildingTemp">—</span></div>
+              <div class="cell hum"></div>`;
+            grid.innerHTML = `
+              <div class="cell room">Unavailable</div>
+              <div class="cell temp">—</div>
+              <div class="cell hum">—</div>
+            ` + existingOut;
+          }
+        }, 1500);
       }
     }
-    loadOutbuilding();
-    setInterval(loadOutbuilding, REFRESH_MS);
-  })();
+
+    document.addEventListener('DOMContentLoaded', () => {
+      load_nest();
+      setInterval(load_nest, REFRESH_MS);
+    });
+  </script>
+
+  <!-- === Outbuilding Updater === -->
+  <script>
+    (async () => {
+      const REL = "data/outbuilding.txt";
+      const ABS = "file:///home/fcapria/app/data/outbuilding.txt";
+      const REFRESH_MS = 1800000; // 30 minutes
+
+      async function loadOutbuilding() {
+        try {
+          const res = await fetch(REL).catch(() => fetch(ABS));
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const text = (await res.text()).trim();
+          const span = document.getElementById("outbuildingTemp");
+          if (span) span.textContent = text || "—";
+        } catch {
+          const span = document.getElementById("outbuildingTemp");
+          if (span) span.textContent = "Unavailable";
+        }
+      }
+      loadOutbuilding();
+      setInterval(loadOutbuilding, REFRESH_MS);
+    })();
+  </script>
+
+<!-- === Solar Event Script (corrected SunCalc math) === -->
+<script>
+(() => {
+  const LAT = 44.279397, LON = -69.007578, TZ = "America/New_York";
+  const DEG2RAD = Math.PI / 180, J2000 = 2451545, J0 = 0.0009;
+  const e = DEG2RAD * 23.4397;                         // axial tilt
+
+  const toJulian   = d => d.getTime()/86400000 + 2440587.5;
+  const fromJulian = j => new Date((j - 2440587.5)*86400000);
+  const daysSinceJ2000 = d => toJulian(d) - J2000;
+
+  const sin = Math.sin, cos = Math.cos, asin = Math.asin, acos = Math.acos;
+  const solarMeanAnomaly   = d => DEG2RAD * (357.5291 + 0.98560028*d);
+  const eclipticLongitude  = M => {
+    const C = DEG2RAD*(1.9148*sin(M) + 0.0200*sin(2*M) + 0.0003*sin(3*M));
+    const P = DEG2RAD*102.9372;
+    return M + C + P + Math.PI;
+  };
+  const solarDeclination   = L => asin(sin(L) * sin(e));
+  const hourAngle = (h0, phi, dec) =>
+    acos((sin(h0) - sin(phi)*sin(dec)) / (cos(phi)*cos(dec)));
+
+  // Returns absolute Date instants for sunrise/sunset at given local calendar date
+  function getSunTimes(dateLocal, lat, lon) {
+    // Anchor at UTC noon for the calendar date to avoid DST edges
+    const dateUTCNoon = new Date(Date.UTC(dateLocal.getFullYear(), dateLocal.getMonth(), dateLocal.getDate(), 12, 0, 0));
+    const d  = daysSinceJ2000(dateUTCNoon);
+    const lw = -lon * DEG2RAD;     // NOTE: negative longitude
+    const phi =  lat * DEG2RAD;
+
+    // Correct day index and solar day offset (SunCalc/NOAA)
+    const n  = Math.round(d - J0 - lw/(2*Math.PI));
+    const ds = n - lw/(2*Math.PI);
+
+    const M = solarMeanAnomaly(ds);
+    const L = eclipticLongitude(M);
+    const dec = solarDeclination(L);
+
+    // Solar transit (local solar noon)
+    const Jtransit = J2000 + J0 + ds + 0.0053*sin(M) - 0.0069*sin(2*L);
+
+    // Civil rise/set altitude
+    const h0 = DEG2RAD * -0.833;
+    const w0 = hourAngle(h0, phi, dec);
+
+    // Rise/Set (include J0 term and longitude properly) 
+    const Jrise = J2000 + J0 + ( -w0 + lw )/(2*Math.PI) + n + 0.0053*sin(M) - 0.0069*sin(2*L);
+    const Jset  = J2000 + J0 + (  w0 + lw )/(2*Math.PI) + n + 0.0053*sin(M) - 0.0069*sin(2*L);
+
+    return { sunrise: fromJulian(Jrise), sunset: fromJulian(Jset), solarNoon: fromJulian(Jtransit) };
+  }
+
+  const fmtTime = d => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: TZ });
+  const fmtShort = ms => {
+    const neg = ms < 0; let s = Math.abs(Math.floor(ms/1000));
+    const h = Math.floor(s/3600); s -= h*3600;
+    const m = Math.floor(s/60);   s -= m*60;
+    return (neg ? "−" : "") + (h ? `${h}h ${m}m` : `${m}m ${s}s`);
+  };
+
+  function nextSolarEvent(now = new Date()) {
+    // Determine today's calendar date in America/New_York
+    const tzNow = new Date(now.toLocaleString("en-US", { timeZone: TZ }));
+    const today = new Date(tzNow.getFullYear(), tzNow.getMonth(), tzNow.getDate());
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+
+    const todayTimes = getSunTimes(today, LAT, LON);
+    const nextTimes  = getSunTimes(tomorrow, LAT, LON);
+
+    const nowAbs = now; // compare absolute instants
+    if (nowAbs < todayTimes.sunrise) return { label: "Sunrise", at: todayTimes.sunrise };
+    if (nowAbs < todayTimes.sunset)  return { label: "Sunset",  at: todayTimes.sunset  };
+    return { label: "Sunrise", at: nextTimes.sunrise };
+  }
+
+  const timeEl  = document.getElementById("solar-time");
+  const countEl = document.getElementById("solar-count");
+
+  function render() {
+    const evt = nextSolarEvent();
+    const ms = evt.at.getTime() - Date.now();
+    timeEl.textContent  = `${evt.label}  ${fmtTime(evt.at)}`;
+    countEl.textContent = ms >= 0 ? `in ${fmtShort(ms)}` : `since ${fmtShort(ms)}`;
+  }
+
+  render();
+  setInterval(render, 1000);
+})();
 </script>
 </body>
 </html>
