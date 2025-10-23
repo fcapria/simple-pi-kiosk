@@ -233,7 +233,7 @@
     const h0 = DEG2RAD * -0.833;
     const w0 = hourAngle(h0, phi, dec);
 
-    // Rise/Set (include J0 term and longitude properly)
+    // Rise/Set (include J0 term and longitude properly) 
     const Jrise = J2000 + J0 + ( -w0 + lw )/(2*Math.PI) + n + 0.0053*sin(M) - 0.0069*sin(2*L);
     const Jset  = J2000 + J0 + (  w0 + lw )/(2*Math.PI) + n + 0.0053*sin(M) - 0.0069*sin(2*L);
 
