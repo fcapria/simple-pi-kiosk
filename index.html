@@ -13,9 +13,10 @@
       <!-- === Tile 1 === -->
       <div class="tile tile1">
         <iframe
-          src="https://www.youtube.com/embed/ww6oRiTtszE?autoplay=1&mute=1"
+          src="https://www.youtube-nocookie.com/embed/pxJSwpFdD1Q?autoplay=1&mute=1"
           title="YouTube video player"
           allow="autoplay; encrypted-media; picture-in-picture"
+          referrerpolicy="strict-origin-when-cross-origin"
           allowfullscreen>
         </iframe>
       </div>
@@ -52,7 +53,26 @@
           allowfullscreen>
         </iframe>
       </div>
-      <div class="tile tile4">Tile 4</div>
+
+      <!-- === Tile 4 (Tide) === -->
+      <div class="tile tile4">
+        <div class="nest-lines tide-wrapper">
+          <div id="tideGrid" class="nest-grid" aria-label="Tide data">
+            <div class="cell room">Last</div>
+            <div class="cell temp"><span id="tide-last">—</span></div>
+            <div class="cell hum"></div>
+
+            <div class="cell room">Next</div>
+            <div class="cell temp"><span id="tide-next">—</span></div>
+            <div class="cell hum"></div>
+          </div>
+
+          <!-- Centered line below the grid -->
+          <div id="tide-current" class="tide-current">—</div>
+        </div>
+      </div>
+
+      <!-- === Tile 5 === -->
       <div class="tile tile5">Tile 5</div>
     </div>
   </div>
@@ -75,7 +95,7 @@
     }
   </script>
 
-  <!-- === Refresh only Tile 3 every 3 minutes === -->
+  <!-- === Refresh Tile 3 every 3 minutes === -->
   <script>
     setInterval(() => {
       const cam = document.querySelector('.tile3 iframe');
@@ -277,5 +297,97 @@
   setInterval(render, 1000);
 })();
 </script>
+<script>
+(() => {
+  const REL = "data/tides.json";                       // your kiosk JSON
+  const ABS = "file:///home/fcapria/app/data/tides.json";
+  const REFRESH_MS = 180000; // 3 minutes
+
+  const $prev = document.getElementById("tide-prev");
+  const $next = document.getElementById("tide-next");
+  const $now  = document.getElementById("tide-now");
+
+  async function fetchJSON(url) {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  function render(data) {
+    // data.previousEvent already contains "High at 12:38 PM"
+    // We show: "Last: High at 12:38 PM, 10' 9""
+    $prev.textContent = `Last: ${data.previousEvent}, ${data.previousHeight}`;
+    $next.textContent = `Next: ${data.nextEvent}, ${data.nextHeight}`;
+    $now.textContent  = `Now: ${data.currentHeight}`;
+  }
+
+  async function loadTides() {
+    try {
+      const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
+      render(data);
+    } catch (e) {
+      // One more retry to ABS in case of transient issue
+      try {
+        const data = await fetchJSON(ABS);
+        render(data);
+      } catch {
+        $prev.textContent = "Last: unavailable";
+        $next.textContent = "Next: unavailable";
+        $now.textContent  = "Now: unavailable";
+      }
+    }
+  }
+
+  loadTides();
+  setInterval(loadTides, REFRESH_MS);
+})();
+</script>
+<script>
+(() => {
+  const REL = "data/tides.json";
+  const ABS = "file:///home/fcapria/app/data/tides.json";
+  const REFRESH_MS = 180000; // 3 minutes
+
+  const elLast = document.getElementById("tide-last");
+  const elNext = document.getElementById("tide-next");
+  const elCurrent = document.getElementById("tide-current");
+
+  async function fetchJSON(url) {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  const normalize = s => {
+    if (!s) return "";
+    const [kind, time] = s.split(" at ");
+    return `${kind} tide at ${time}`;
+  };
+
+  function render(d) {
+    elLast.textContent = `${normalize(d.previousEvent)} of ${d.previousHeight}`;
+    elNext.textContent = `${normalize(d.nextEvent)} of ${d.nextHeight}`;
+    elCurrent.textContent = `Currently: ${d.currentHeight}`;
+  }
+
+  async function loadTides() {
+    try {
+      const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
+      render(data);
+    } catch {
+      try { render(await fetchJSON(ABS)); }
+      catch {
+        elLast.textContent = "unavailable";
+        elNext.textContent = "unavailable";
+        elCurrent.textContent = "Currently: unavailable";
+      }
+    }
+  }
+
+  loadTides();
+  setInterval(loadTides, REFRESH_MS);
+})();
+</script>
+
 </body>
 </html>

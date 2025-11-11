@@ -176,5 +176,27 @@ html, body {
 }
 
 /* Tile 4/5 placeholders */
-.tile4 { background: #9b59b6; }
 .tile5 { background: #c0392b; }
+
+/* === Tile 4 centering and current line === */
+.tile4 {
+  background: #5b92ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tide-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;              /* center grid + current line */
+  gap: var(--space-xs);
+}
+
+.tide-current {
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
