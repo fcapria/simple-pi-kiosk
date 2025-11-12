@@ -1,10 +1,10 @@
-<!doctype html>
+<!doctype html> 
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pi Kiosk Tiles</title>
-  <link rel="stylesheet" href="kiosk.css?v=1">
+  <link rel="stylesheet" href="kiosk.css?v=5">
 </head>
 
 <body>
@@ -54,21 +54,23 @@
         </iframe>
       </div>
 
-      <!-- === Tile 4 (Tide) === -->
+      <!-- === Tile 4 (Tide Gauge) === -->
       <div class="tile tile4">
-        <div class="nest-lines tide-wrapper">
-          <div id="tideGrid" class="nest-grid" aria-label="Tide data">
-            <div class="cell room">Last</div>
-            <div class="cell temp"><span id="tide-last">—</span></div>
-            <div class="cell hum"></div>
+        <div class="tide-gauge">
+          <div id="tide-high-label" class="tide-label">High —</div>
 
-            <div class="cell room">Next</div>
-            <div class="cell temp"><span id="tide-next">—</span></div>
-            <div class="cell hum"></div>
+          <div class="tide-bar-wrap">
+            <div class="tide-bar">
+              <div id="tide-marker" class="tide-marker"></div>
+            </div>
+            <div id="tide-arrow" class="tide-arrow">↓</div>
           </div>
 
-          <!-- Centered line below the grid -->
-          <div id="tide-current" class="tide-current">—</div>
+          <div id="tide-low-label" class="tide-label">Low —</div>
+        </div>
+
+        <div id="tide-current-label" class="tide-current-label">
+          Current —
         </div>
       </div>
 
@@ -299,58 +301,16 @@
 </script>
 <script>
 (() => {
-  const REL = "data/tides.json";                       // your kiosk JSON
-  const ABS = "file:///home/fcapria/app/data/tides.json";
-  const REFRESH_MS = 180000; // 3 minutes
-
-  const $prev = document.getElementById("tide-prev");
-  const $next = document.getElementById("tide-next");
-  const $now  = document.getElementById("tide-now");
-
-  async function fetchJSON(url) {
-    const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-  }
-
-  function render(data) {
-    // data.previousEvent already contains "High at 12:38 PM"
-    // We show: "Last: High at 12:38 PM, 10' 9""
-    $prev.textContent = `Last: ${data.previousEvent}, ${data.previousHeight}`;
-    $next.textContent = `Next: ${data.nextEvent}, ${data.nextHeight}`;
-    $now.textContent  = `Now: ${data.currentHeight}`;
-  }
-
-  async function loadTides() {
-    try {
-      const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
-      render(data);
-    } catch (e) {
-      // One more retry to ABS in case of transient issue
-      try {
-        const data = await fetchJSON(ABS);
-        render(data);
-      } catch {
-        $prev.textContent = "Last: unavailable";
-        $next.textContent = "Next: unavailable";
-        $now.textContent  = "Now: unavailable";
-      }
-    }
-  }
-
-  loadTides();
-  setInterval(loadTides, REFRESH_MS);
-})();
-</script>
-<script>
-(() => {
   const REL = "data/tides.json";
   const ABS = "file:///home/fcapria/app/data/tides.json";
   const REFRESH_MS = 180000; // 3 minutes
 
-  const elLast = document.getElementById("tide-last");
-  const elNext = document.getElementById("tide-next");
-  const elCurrent = document.getElementById("tide-current");
+  const elHigh = document.getElementById("tide-high-label");
+  const elLow = document.getElementById("tide-low-label");
+  const elArrow = document.getElementById("tide-arrow");
+  const elMarker = document.getElementById("tide-marker");
+  const elCurrent = document.getElementById("tide-current-label");
+  const bar = document.querySelector(".tide-bar");
 
   async function fetchJSON(url) {
     const r = await fetch(url, { cache: "no-store" });
@@ -358,16 +318,89 @@
     return r.json();
   }
 
-  const normalize = s => {
-    if (!s) return "";
-    const [kind, time] = s.split(" at ");
-    return `${kind} tide at ${time}`;
-  };
+  // Parse "10' 9\"" or "5.3" into feet as a number
+  function parseHeight(h) {
+    if (h == null) return null;
+    if (typeof h === "number") return h;
+    const s = String(h).trim();
+    // match feet'inches"
+    let m = s.match(/(\d+)\s*'\s*(\d+)?/);
+    if (m) {
+      const ft = parseInt(m[1], 10);
+      const inch = m[2] ? parseInt(m[2], 10) : 0;
+      return ft + inch / 12;
+    }
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
 
   function render(d) {
-    elLast.textContent = `${normalize(d.previousEvent)} of ${d.previousHeight}`;
-    elNext.textContent = `${normalize(d.nextEvent)} of ${d.nextHeight}`;
-    elCurrent.textContent = `Currently: ${d.currentHeight}`;
+    const prevH = parseHeight(d.previousHeight);
+    const nextH = parseHeight(d.nextHeight);
+    const curH  = parseHeight(d.currentHeight);
+
+    // ---- High / Low labels (this was wrong before) ----
+    let highText = "—";
+    if (d.previousEvent && d.previousEvent.startsWith("High")) {
+      highText = d.previousHeight || highText;
+    }
+    if (d.nextEvent && d.nextEvent.startsWith("High")) {
+      highText = d.nextHeight || highText;
+    }
+
+    let lowText = "—";
+    if (d.previousEvent && d.previousEvent.startsWith("Low")) {
+      lowText = d.previousHeight || lowText;
+    }
+    if (d.nextEvent && d.nextEvent.startsWith("Low")) {
+      lowText = d.nextHeight || lowText;
+    }
+
+    elHigh.textContent = `High ${highText}`;
+    elLow.textContent  = `Low ${lowText}`;
+    elCurrent.textContent = `Current ${d.currentHeight || "—"}`;
+
+    // ---- Scale + marker position ----
+    const vals = [prevH, nextH, curH].filter(v => v != null);
+    let min = Math.min(...vals);
+    let max = Math.max(...vals);
+
+    if (!isFinite(min) || !isFinite(max) || min === max) {
+      min = 0;
+      max = 10;
+    }
+
+    let frac = 0.5;
+    if (curH != null) {
+      const clamped = Math.max(min, Math.min(max, curH));
+      // 0 = top (high), 1 = bottom (low)
+      frac = (max - clamped) / (max - min);
+    }
+
+    const barHeight = (bar && bar.clientHeight) || 360;
+    elMarker.style.top = `${frac * barHeight}px`;
+
+    // Vertically align "Current" label with the marker (Y-axis only)
+    if (bar && elCurrent) {
+      const barRect = bar.getBoundingClientRect();
+      const currentRect = elCurrent.getBoundingClientRect();
+
+      const markerY = barRect.top + frac * barHeight;
+      const currentCenterY = currentRect.top + currentRect.height / 2;
+      const deltaY = markerY - currentCenterY;
+
+      elCurrent.style.transform = `translateY(${deltaY}px)`;
+    }
+
+
+    // ---- Arrow: what we are moving toward ----
+    if (d.nextEvent && d.nextEvent.startsWith("High")) {
+      elArrow.textContent = "↑";
+    } else if (d.nextEvent && d.nextEvent.startsWith("Low")) {
+      elArrow.textContent = "↓";
+    } else {
+      elArrow.textContent = "·";
+    }
   }
 
   async function loadTides() {
@@ -375,12 +408,10 @@
       const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
       render(data);
     } catch {
-      try { render(await fetchJSON(ABS)); }
-      catch {
-        elLast.textContent = "unavailable";
-        elNext.textContent = "unavailable";
-        elCurrent.textContent = "Currently: unavailable";
-      }
+      elHigh.textContent = "High —";
+      elLow.textContent = "Low —";
+      elArrow.textContent = "·";
+      elCurrent.textContent = "Current unavailable";
     }
   }
 

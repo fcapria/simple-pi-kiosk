@@ -176,27 +176,62 @@ html, body {
 }
 
 /* Tile 4/5 placeholders */
-.tile5 { background: #c0392b; }
+.tile5 { background: #000; }
 
-/* === Tile 4 centering and current line === */
+/* === Tile 4: Tide Gauge === */
 .tile4 {
-  background: #5b92ff;
+  background: linear-gradient(180deg, #032f54 0%, #075307 100%);
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-left: var(--space-lg);
+  gap: var(--space-lg);
 }
 
-.tide-wrapper {
+/* Left block: vertical gauge */
+.tide-gauge {
   display: flex;
   flex-direction: column;
-  align-items: center;              /* center grid + current line */
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tide-label {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+}
+
+/* Bar + marker */
+.tide-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--space-xs);
 }
 
-.tide-current {
-  font-weight: 600;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.9;
+.tide-bar {
+  width: 18px;
+  height: 360px;
+  background: hsl(183, 28%, 50%);
+  border-radius: 9px;
+  position: relative;
 }
 
+.tide-marker {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #FFF;
+  border: 3px solid #123a58;
+}
+
+/* Right block: current text */
+.tide-current-label {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  /* critical: no absolute, no left; JS will only shift it vertically */
+}
