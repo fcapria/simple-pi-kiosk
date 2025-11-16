@@ -1,46 +1,56 @@
 #!/usr/bin/env python3
-<<<<<<< HEAD
-import requests, pathlib
-=======
-import requests, pathlib, os
->>>>>>> solar-data
+import requests
+import pathlib
+import os
+from datetime import datetime
+import zoneinfo
 
-url = "https://docs.google.com/spreadsheets/d/17H_sfh2vPotpC_5STXc7eMvWVJd3NaOwI4nJDuhGNtw/gviz/tq?tqx=out:csv&gid=1417153842&range=A1"
-dest = pathlib.Path("/home/fcapria/app/data/outbuilding.txt")
 
-try:
-<<<<<<< HEAD
-=======
-    # Fetch the value from Google Sheet
->>>>>>> solar-data
-    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+URL = "https://docs.google.com/spreadsheets/d/17H_sfh2vPotpC_5STXc7eMvWVJd3NaOwI4nJDuhGNtw/gviz/tq?tqx=out:csv&gid=1417153842&range=A1"
+DEST = pathlib.Path("/home/fcapria/app/data/outbuilding.txt")
+LOG  = pathlib.Path("/home/fcapria/app/logs/outbuilding.log")
+
+
+def write_log(line: str) -> None:
+  """Append a timestamped line to the log file."""
+  NY = zoneinfo.ZoneInfo("America/New_York")
+  ts = datetime.now(NY).strftime("%Y-%m-%d %H:%M:%S")
+  LOG.parent.mkdir(parents=True, exist_ok=True)
+  with LOG.open("a", encoding="utf-8") as f:
+    f.write(f"{ts} {line}\n")
+
+
+def write_atomically(path: pathlib.Path, text: str) -> None:
+  """Write text to path using a .tmp file, then chmod 644."""
+  path.parent.mkdir(parents=True, exist_ok=True)
+  tmp = path.with_suffix(path.suffix + ".tmp")
+  tmp.write_text(text, encoding="utf-8")
+  tmp.replace(path)
+  os.chmod(path, 0o644)
+
+def main():
+  try:
+    r = requests.get(
+      URL,
+      headers={"User-Agent": "Mozilla/5.0"},
+      timeout=10,
+    )
     r.raise_for_status()
-    val = r.text.splitlines()[0].split(',')[0].strip().strip('"')
+
+    # First cell of first line
+    val = r.text.splitlines()[0].split(",")[0].strip().strip('"')
     out = f"{val}°F"
-<<<<<<< HEAD
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(out)
-    print(out)
-except Exception as e:
+
+    write_atomically(DEST, out)
+    msg = f"Wrote {out} → {DEST.resolve()}"
+    #print(msg)
+    write_log(msg)
+
+  except Exception as e:
     err = f"Error: {e}"
-    dest.write_text(err)
-=======
+    write_atomically(DEST, err)
+    #print(err)
+    write_log(err)
 
-    # Ensure directory exists and write atomically
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".tmp")
-    tmp.write_text(out, encoding="utf-8")
-    tmp.replace(dest)
-    os.chmod(dest, 0o644)
-
-    print(f"Wrote {out} → {dest.resolve()}")
-
-except Exception as e:
-    err = f"Error: {e}"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".tmp")
-    tmp.write_text(err, encoding="utf-8")
-    tmp.replace(dest)
-    os.chmod(dest, 0o644)
->>>>>>> solar-data
-    print(err)
+if __name__ == "__main__":
+  main()

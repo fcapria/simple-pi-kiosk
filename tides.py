@@ -90,11 +90,12 @@ def main():
         "station": STATION
     }
 
-    # Ensure directory exists
-    os.makedirs("data", exist_ok=True)
+    baseDir = os.path.dirname(os.path.abspath(__file__))
+    dataDir = os.path.join(baseDir, "data")
+    os.makedirs(dataDir, exist_ok=True)
 
-    # Write to JSON file
-    with open("data/tides.json", "w") as f:
+    jsonPath = os.path.join(dataDir, "tides.json")
+    with open(jsonPath, "w") as f:
         json.dump(data, f, indent=2)
 
     # Also print to stdout for visibility

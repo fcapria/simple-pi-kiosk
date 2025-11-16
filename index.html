@@ -6,7 +6,7 @@
   <title>Pi Kiosk Tiles</title>
   <link rel="stylesheet" href="kiosk.css?v=5">
 </head>
-
+  
 <body>
   <div class="container">
     <div class="top">
@@ -19,6 +19,8 @@
           referrerpolicy="strict-origin-when-cross-origin"
           allowfullscreen>
         </iframe>
+        <!-- REAL overlay box -->
+          <div id="tile1-topbox" class="tile1-topbox">Loading…</div>
       </div>
 
       <!-- === Tile 2 === -->
@@ -43,36 +45,34 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- === Bottom Row === -->
+    </div>      
+   
+    <!-- === Bottom Row === --> 
     <div class="bottom">
       <div class="tile tile3">
         <iframe
-          src="https://newengland511.org/map/Cctv/1672?t=1760281998"
+          src="https://newengland511.org/map/Cctv/1672?t=1760281998"  
           allowfullscreen>
         </iframe>
       </div>
+ 
+    <!-- === Tile 4 (Tide Gauge) — cleaned === -->
+    <div class="tile tile4" aria-label="Tide gauge">
+      <div class="tide-header">Tides</div>
+      <div class="tg">
+        <div id="tg-high" class="tg-label" aria-live="polite">High —</div>
 
-      <!-- === Tile 4 (Tide Gauge) === -->
-      <div class="tile tile4">
-        <div class="tide-gauge">
-          <div id="tide-high-label" class="tide-label">High —</div>
-
-          <div class="tide-bar-wrap">
-            <div class="tide-bar">
-              <div id="tide-marker" class="tide-marker"></div>
-            </div>
-            <div id="tide-arrow" class="tide-arrow">↓</div>
+        <div class="tg-bar-wrap">
+          <div class="tg-bar" role="img" aria-label="Vertical tide gauge">
+            <div id="tg-marker" class="tg-marker" aria-hidden="true"></div>
           </div>
-
-          <div id="tide-low-label" class="tide-label">Low —</div>
         </div>
 
-        <div id="tide-current-label" class="tide-current-label">
-          Current —
-        </div>
+        <div id="tg-low" class="tg-label" aria-live="polite">Low —</div>
       </div>
+
+      <div id="tg-current" class="tg-current" aria-live="polite">Current —</div>
+    </div>
 
       <!-- === Tile 5 === -->
       <div class="tile tile5">Tile 5</div>
@@ -97,6 +97,45 @@
     }
   </script>
 
+  <!-- === Refresh Tile 1 tile 1 top overlay data === -->
+  <script>
+  (async () => {
+    const BOX = document.getElementById("tile1-topbox");
+    if (!BOX) return;
+
+    const REL = "data/tides.json";
+    const ABS = "file:///home/fcapria/app/data/tides.json";
+    const REFRESH_MS = 60000;  // 1 minute
+
+    async function fetchJSON(url) {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }
+
+    function renderBox(d) {
+      const prev = d.previousHeight || "—";
+      const next = d.nextHeight || "—";
+      const cur  = d.currentHeight || "—";
+
+      BOX.textContent = `High: ${prev} | Low: ${next} | Current: ${cur}`;
+    }
+
+    async function load() {
+      try {
+        const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
+        renderBox(data);
+      } catch {
+        BOX.textContent = "Tide data unavailable";
+      }
+    }
+
+    load();
+    setInterval(load, REFRESH_MS);
+  })();
+  </script>
+
+
   <!-- === Refresh Tile 3 every 3 minutes === -->
   <script>
     setInterval(() => {
@@ -106,19 +145,19 @@
         cam.src = `${src}?t=${Date.now()}`;
       }
     }, 180000);
-  </script>
+  </script>  
 
   <!-- === Nest Data Loader === -->
-  <script>
+  <script> 
     const REL = 'data/nest.json';
     const ABS = 'file:///home/fcapria/app/data/nest.json';
     const REFRESH_MS = 300000;
 
     async function fetchJSON(url) {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
-    }
+    } 
 
     function renderNestGrid(containerEl, thermostats) {
       const outCells = Array.from(containerEl.querySelectorAll('#outbuildingTemp'))
@@ -157,27 +196,35 @@
     async function load_nest() {
       const grid = document.getElementById('nestGrid');
       if (!grid) return;
+
+      const bust = Date.now();
+
       try {
-        const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
+        // Try relative JSON (no-cache + cache-bust)
+        const data = await fetchJSON(`${REL}?t=${bust}`);
         renderNestGrid(grid, data.thermostats);
-      } catch {
-        setTimeout(async () => {
-          try {
-            const data = await fetchJSON(ABS);
-            renderNestGrid(grid, data.thermostats);
-          } catch {
-            const existingOut = `
-              <div class="cell room">Outbuilding</div>
-              <div class="cell temp"><span id="outbuildingTemp">—</span></div>
-              <div class="cell hum"></div>`;
-            grid.innerHTML = `
-              <div class="cell room">Unavailable</div>
-              <div class="cell temp">—</div>
-              <div class="cell hum">—</div>
-            ` + existingOut;
-          }
-        }, 1500);
-      }
+        if (typeof window.loadOutbuilding === 'function') window.loadOutbuilding();
+        return;
+      } catch {}
+
+      // Fallback to absolute file path after a short delay
+      setTimeout(async () => {
+        try {
+          const data = await fetchJSON(`${ABS}?t=${Date.now()}`);
+          renderNestGrid(grid, data.thermostats);
+          if (typeof window.loadOutbuilding === 'function') window.loadOutbuilding();
+        } catch {
+          const existingOut = `
+            <div class="cell room">Outbuilding</div>
+            <div class="cell temp"><span id="outbuildingTemp">—</span></div>
+            <div class="cell hum"></div>`;
+          grid.innerHTML = `
+            <div class="cell room">Unavailable</div>
+            <div class="cell temp">—</div>
+            <div class="cell hum">—</div>
+          ` + existingOut;
+        }
+      }, 1500);
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -187,28 +234,55 @@
   </script>
 
   <!-- === Outbuilding Updater === -->
-  <script>
-    (async () => {
-      const REL = "data/outbuilding.txt";
-      const ABS = "file:///home/fcapria/app/data/outbuilding.txt";
-      const REFRESH_MS = 1800000; // 30 minutes
+<script>
+  (async () => {
+    const REL = "data/outbuilding.txt";
+    const ABS = "file:///home/fcapria/app/data/outbuilding.txt";
+    const REFRESH_MS = 1800000; // 30 minutes
 
-      async function loadOutbuilding() {
-        try {
-          const res = await fetch(REL).catch(() => fetch(ABS));
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const text = (await res.text()).trim();
-          const span = document.getElementById("outbuildingTemp");
-          if (span) span.textContent = text || "—";
-        } catch {
-          const span = document.getElementById("outbuildingTemp");
-          if (span) span.textContent = "Unavailable";
-        }
+    const stampEl = document.getElementById("outbuildingStamp"); // ok if missing
+
+    async function loadOutbuilding() {
+      const bust = Date.now();
+      try {
+        console.log("[outbuilding] fetch", `${REL}?t=${bust}`);
+        const res = await fetch(`${REL}?t=${bust}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`REL HTTP ${res.status}`);
+        const text = (await res.text()).trim();
+        const span = document.getElementById("outbuildingTemp");
+        if (span) span.textContent = text || "—";
+        if (stampEl) stampEl.textContent = "outbuilding ✓ " + new Date().toLocaleTimeString();
+        return;
+      } catch (e) {
+        console.warn("[outbuilding] REL failed:", e);
       }
-      loadOutbuilding();
-      setInterval(loadOutbuilding, REFRESH_MS);
-    })();
-  </script>
+
+      // fallback
+      try {
+        const bust2 = Date.now();
+        console.log("[outbuilding] fallback", `${ABS}?t=${bust2}`);
+        const res = await fetch(`${ABS}?t=${bust2}`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`ABS HTTP ${res.status}`);
+        const text = (await res.text()).trim();
+        const span = document.getElementById("outbuildingTemp");
+        if (span) span.textContent = text || "—";
+        if (stampEl) stampEl.textContent = "outbuilding (ABS) ✓ " + new Date().toLocaleTimeString();
+      } catch (e) {
+        console.error("[outbuilding] ABS failed:", e);
+        const span = document.getElementById("outbuildingTemp");
+        if (span) span.textContent = "Unavailable";
+        if (stampEl) stampEl.textContent = "outbuilding ✗ " + new Date().toLocaleTimeString();
+      }
+    }
+
+    // expose for Nest to call after it renders (optional)
+    window.loadOutbuilding = loadOutbuilding;
+
+    // kick off + schedule
+    loadOutbuilding();
+    setInterval(loadOutbuilding, REFRESH_MS);
+  })();
+</script>
 
 <!-- === Solar Event Script (corrected SunCalc math) === -->
 <script>
@@ -305,12 +379,12 @@
   const ABS = "file:///home/fcapria/app/data/tides.json";
   const REFRESH_MS = 180000; // 3 minutes
 
-  const elHigh = document.getElementById("tide-high-label");
-  const elLow = document.getElementById("tide-low-label");
-  const elArrow = document.getElementById("tide-arrow");
-  const elMarker = document.getElementById("tide-marker");
-  const elCurrent = document.getElementById("tide-current-label");
-  const bar = document.querySelector(".tide-bar");
+  // Elements
+  const elHigh    = document.getElementById("tg-high");
+  const elLow     = document.getElementById("tg-low");
+  const elMarker  = document.getElementById("tg-marker");
+  const elCurrent = document.getElementById("tg-current");
+  const bar       = document.querySelector(".tg-bar");
 
   async function fetchJSON(url) {
     const r = await fetch(url, { cache: "no-store" });
@@ -318,20 +392,52 @@
     return r.json();
   }
 
-  // Parse "10' 9\"" or "5.3" into feet as a number
+  // Accepts 10' 9"  or  5.3  → feet (Number)
   function parseHeight(h) {
     if (h == null) return null;
     if (typeof h === "number") return h;
     const s = String(h).trim();
-    // match feet'inches"
-    let m = s.match(/(\d+)\s*'\s*(\d+)?/);
+    const m = s.match(/^(\d+)\s*'\s*(\d+)?/);
     if (m) {
-      const ft = parseInt(m[1], 10);
-      const inch = m[2] ? parseInt(m[2], 10) : 0;
+      const ft = +m[1], inch = m[2] ? +m[2] : 0;
       return ft + inch / 12;
     }
     const n = parseFloat(s);
-    return isNaN(n) ? null : n;
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Align the "Current" label to the marker without ping-ponging
+  function alignCurrentWithMarker(frac) {
+    if (!bar || !elCurrent) return;
+
+    // 1) Place marker immediately
+    const barRect1 = bar.getBoundingClientRect();
+    const barH = barRect1.height || 360;
+    elMarker.style.top = `${frac * barH}px`;
+
+    // 2) Next frame: reset transform, measure clean, then align
+    requestAnimationFrame(() => {
+      elCurrent.style.transform = 'translateY(0)';
+      // Force reflow so reset applies before measuring
+      // eslint-disable-next-line no-unused-expressions 
+      elCurrent.offsetHeight;
+
+      const barRect = bar.getBoundingClientRect();
+      const markerCenterY = barRect.top + frac * barRect.height;
+
+      const currentRect = elCurrent.getBoundingClientRect();
+      const currentCenterY = currentRect.top + currentRect.height / 2;
+
+      const deltaY = Math.round(markerCenterY - currentCenterY);
+      elCurrent.style.transform = `translateY(${deltaY}px)`;
+    });
+  }
+
+  function labelPick(prevEvent, prevHeight, nextEvent, nextHeight, type) {
+    let txt = "—";
+    if (prevEvent?.startsWith(type)) txt = prevHeight || txt;
+    if (nextEvent?.startsWith(type)) txt = nextHeight || txt; 
+    return txt;
   }
 
   function render(d) {
@@ -339,86 +445,72 @@
     const nextH = parseHeight(d.nextHeight);
     const curH  = parseHeight(d.currentHeight);
 
-    // ---- High / Low labels (this was wrong before) ----
-    let highText = "—";
-    if (d.previousEvent && d.previousEvent.startsWith("High")) {
-      highText = d.previousHeight || highText;
-    }
-    if (d.nextEvent && d.nextEvent.startsWith("High")) {
-      highText = d.nextHeight || highText;
-    }
+    // Labels
+    elHigh.textContent = `${labelPick(d.previousEvent, d.previousHeight, d.nextEvent, d.nextHeight, "High")}`;
+    elLow.textContent     = `${labelPick(d.previousEvent, d.previousHeight, d.nextEvent, d.nextHeight, "Low")}`;
+    elCurrent.textContent = `${d.currentHeight ?? "—"}`; 
 
-    let lowText = "—";
-    if (d.previousEvent && d.previousEvent.startsWith("Low")) {
-      lowText = d.previousHeight || lowText;
-    }
-    if (d.nextEvent && d.nextEvent.startsWith("Low")) {
-      lowText = d.nextHeight || lowText;
-    }
-
-    elHigh.textContent = `High ${highText}`;
-    elLow.textContent  = `Low ${lowText}`;
-    elCurrent.textContent = `Current ${d.currentHeight || "—"}`;
-
-    // ---- Scale + marker position ----
+    // Scale: include prev/next/current; fall back to sane span 
     const vals = [prevH, nextH, curH].filter(v => v != null);
-    let min = Math.min(...vals);
-    let max = Math.max(...vals);
-
-    if (!isFinite(min) || !isFinite(max) || min === max) {
-      min = 0;
-      max = 10;
+    let min = Math.min(...vals), max = Math.max(...vals);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
+      min = 0; max = 10; // fallback
     }
 
+    // Fraction: 0 at top (max), 1 at bottom (min)
     let frac = 0.5;
     if (curH != null) {
       const clamped = Math.max(min, Math.min(max, curH));
-      // 0 = top (high), 1 = bottom (low)
       frac = (max - clamped) / (max - min);
     }
 
-    const barHeight = (bar && bar.clientHeight) || 360;
-    elMarker.style.top = `${frac * barHeight}px`;
-
-    // Vertically align "Current" label with the marker (Y-axis only)
-    if (bar && elCurrent) {
-      const barRect = bar.getBoundingClientRect();
-      const currentRect = elCurrent.getBoundingClientRect();
-
-      const markerY = barRect.top + frac * barHeight;
-      const currentCenterY = currentRect.top + currentRect.height / 2;
-      const deltaY = markerY - currentCenterY;
-
-      elCurrent.style.transform = `translateY(${deltaY}px)`;
-    }
-
-
-    // ---- Arrow: what we are moving toward ----
-    if (d.nextEvent && d.nextEvent.startsWith("High")) {
-      elArrow.textContent = "↑";
-    } else if (d.nextEvent && d.nextEvent.startsWith("Low")) {
-      elArrow.textContent = "↓";
-    } else {
-      elArrow.textContent = "·";
-    }
-  }
+    // Align marker + Current label
+    alignCurrentWithMarker(frac);   
+    bar.style.background = (d.nextEvent?.startsWith("Low") ? "url('img/tide_down.png')" : "url('img/tide_up.png')") + " center / auto 100% no-repeat";
+  } 
 
   async function loadTides() {
     try {
       const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
       render(data);
     } catch {
-      elHigh.textContent = "High —";
-      elLow.textContent = "Low —";
-      elArrow.textContent = "·";
+      // Keep last known High/Low/Arrow; just make Current sane
       elCurrent.textContent = "Current unavailable";
+      elCurrent.style.transform = "translateY(0)";
     }
   }
-
+ 
+  // First load + periodic refresh
   loadTides();
   setInterval(loadTides, REFRESH_MS);
+
+  // Also realign on resize (layout metrics change)
+  window.addEventListener("resize", loadTides);
 })();
 </script>
-
+<script>
+  // Inline JS error monitor: shows the latest error on-screen
+  (function () {
+    function badge() {
+      let el = document.getElementById('jsError');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'jsError';
+        el.style.cssText = 'position:fixed;bottom:8px;left:8px;padding:6px 8px;background:#300;color:#fff;font:12px/1.2 monospace;z-index:99999;border-radius:4px';
+        document.body.appendChild(el);
+      }
+      return el;  
+    }
+    window.addEventListener('error', function (e) {
+      const msg = e?.message || (e?.error && (e.error.stack || e.error.toString())) || 'Unknown JS error';
+      badge().textContent = 'JS error → ' + msg;
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      const r = e?.reason;
+      const msg = (typeof r === 'string') ? r : (r?.message || r?.toString() || 'Promise rejection');
+      badge().textContent = 'Promise rejection → ' + msg;
+    });
+  })();
+</script> 
 </body>
 </html>
