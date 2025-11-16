@@ -88,7 +88,28 @@ def main():
         "currentHeight": ft_to_ft_in(current_height),
         "timestamp": now_local.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "station": STATION
+
     }
+    # Fetch additional sheet fields
+    try:
+        sheetUrl = "https://docs.google.com/spreadsheets/d/17H_sfh2vPotpC_5STXc7eMvWVJd3NaOwI4nJDuhGNtw/gviz/tq?tqx=out:json&sheet=Sheet1&range=B9:B10"
+        r2 = requests.get(sheetUrl, timeout=12)
+        r2.raise_for_status()
+        js2 = r2.text
+        # Clean the JSONP wrapper
+        js2 = js2[js2.find("{"): js2.rfind("}")+1]
+        sheetData = json.loads(js2)
+        rows = sheetData["table"]["rows"]
+        shoreTemp = rows[0]["c"][0]["v"] if rows and rows[0]["c"] and rows[0]["c"][0] else ""
+        shoreConditions = rows[1]["c"][0]["v"] if len(rows)>1 and rows[1]["c"] and rows[1]["c"][0] else ""
+        data["shoreTemp"] = shoreTemp
+        data["shoreConditions"] = shoreConditions
+    except Exception as e:
+        shoreTemp = ""
+        shoreConditions = ""
+        # Always include the fields, even if empty
+        data["shoreTemp"] = ""
+        data["shoreConditions"] = ""
 
     baseDir = os.path.dirname(os.path.abspath(__file__))
     dataDir = os.path.join(baseDir, "data")

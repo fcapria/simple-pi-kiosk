@@ -96,44 +96,40 @@
       poll();
     }
   </script>
-
-  <!-- === Refresh Tile 1 tile 1 top overlay data === -->
+<!-- === Tile 1 top overlay: Shore temp + conditions from tides.json === -->
   <script>
-  (async () => {
-    const BOX = document.getElementById("tile1-topbox");
-    if (!BOX) return;
+  (() => {
+    const box = document.getElementById("tile1-topbox");
+    if (!box) return;
 
-    const REL = "data/tides.json";
-    const ABS = "file:///home/fcapria/app/data/tides.json";
-    const REFRESH_MS = 60000;  // 1 minute
+    const REL_TIDES = "data/tides.json";
+    const ABS_TIDES = "file:///home/fcapria/app/data/tides.json";
+    const REFRESH_MS_T1 = 180000;  // 3 minutes
 
-    async function fetchJSON(url) {
+    async function fetchJSONLocal(url) {
       const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     }
 
-    function renderBox(d) {
-      const prev = d.previousHeight || "—";
-      const next = d.nextHeight || "—";
-      const cur  = d.currentHeight || "—";
-
-      BOX.textContent = `High: ${prev} | Low: ${next} | Current: ${cur}`;
-    }
-
-    async function load() {
+    async function loadTile1Overlay() {
       try {
-        const data = await fetchJSON(REL).catch(() => fetchJSON(ABS));
-        renderBox(data);
-      } catch {
-        BOX.textContent = "Tide data unavailable";
+        const data = await fetchJSONLocal(REL_TIDES).catch(() => fetchJSONLocal(ABS_TIDES));
+
+        const temp = data.shoreTemp || "—";
+        const cond = data.shoreConditions || "—";
+
+        box.textContent = `${cond} ${temp}`;
+      } catch (e) {
+        box.textContent = "Shore data unavailable";
       }
     }
 
-    load();
-    setInterval(load, REFRESH_MS);
+    loadTile1Overlay();
+    setInterval(loadTile1Overlay, REFRESH_MS_T1);
   })();
   </script>
+
 
 
   <!-- === Refresh Tile 3 every 3 minutes === -->
